@@ -363,3 +363,12 @@ function App() {
 export default App;
 
 -------------------------------------------------------------------------
+-----------DB-------------
+CREATE DATABASE ApiForDemo;
+
+CREATE TABLE Users (
+    Id INT IDENTITY(1,1) PRIMARY KEY,
+    Name NVARCHAR(100) NOT NULL,
+    Email NVARCHAR(100) NOT NULL,
+    Age INT NOT NULL
+);
