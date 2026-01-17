@@ -1,0 +1,365 @@
+-----------Api--------------
+
+-----------------Users.cs-------------------------------------
+    namespace TaskForInterview.Models
+{
+    public class Users
+    {
+        public int Id { get; set; }
+        public string Name { get; set; }
+        public string Email { get; set; }
+        public int Age { get; set; }
+    }
+}
+
+
+---------------UserController.cs-------------------------------
+
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
+using TaskForInterview.Data;
+using TaskForInterview.Models;
+
+namespace TaskForInterview.Controllers
+{
+    [Route("api/[controller]")]
+    [ApiController]
+    public class UserController : ControllerBase
+    {
+        private readonly AppDbContext _context;
+
+        public UserController(AppDbContext context)
+        {
+            _context = context;
+        }
+
+        [HttpPost("CreateNewUser")]
+        public async Task<IActionResult> CreateUser([FromBody] Users user)
+        {
+            await _context.Users.AddAsync(user);
+            await _context.SaveChangesAsync();
+            return Ok(user);
+        }
+
+        [HttpGet("GetAllUsers")]
+        public async Task<IActionResult> GetUsers()
+        {
+            var users = await _context.Users.ToListAsync();
+            return Ok(users);
+        }
+
+        [HttpGet("GetUserById")]
+        public async Task<IActionResult> GetUser(int id)
+        {
+            var user = await _context.Users.FindAsync(id);
+            if (user == null)
+                return NotFound("User not found");
+
+            return Ok(user);
+        }
+
+        [HttpPut("UpdateUserById")]
+        public async Task<IActionResult> UpdateUser(int id, [FromBody] Users user)
+        {
+            if (user.Id != user.Id)
+                return BadRequest("ID mismatch");
+
+            _context.Entry(user).State = EntityState.Modified;
+            await _context.SaveChangesAsync();
+
+            return Ok(user);
+        }
+
+        [HttpDelete("DeleteUserById")]
+        public async Task<IActionResult> DeleteUser(int id)
+        {
+            var user = await _context.Users.FindAsync(id);
+            if (user == null)
+                return NotFound("User not found");
+
+            _context.Users.Remove(user);
+            await _context.SaveChangesAsync();
+
+            return Ok("User deleted successfully");
+        }
+    }
+}
+
+
+------AppDbContext.cs-------
+
+using Microsoft.EntityFrameworkCore;
+using TaskForInterview.Models;
+
+namespace TaskForInterview.Data
+{
+    public class AppDbContext : DbContext
+    {
+        public AppDbContext(DbContextOptions<AppDbContext> options)
+            : base(options)
+        {
+        }
+
+        public DbSet<Users> Users { get; set; }
+    }
+}
+
+---------------appsettings.json------------------
+
+    {
+    "ConnectionStrings": {
+        "DefaultConnection": "Server=put-server-name;Database=ApiForDemo;Trusted_Connection=True;TrustServerCertificate=True"
+    },
+  "Logging": {
+        "LogLevel": {
+            "Default": "Information",
+      "Microsoft.AspNetCore": "Warning"
+        }
+    },
+  "AllowedHosts": "*"
+}
+
+-----------------Program.cs-----------------------
+
+using Microsoft.EntityFrameworkCore;
+using TaskForInterview.Data;
+
+var builder = WebApplication.CreateBuilder(args);
+
+// Add services to the container.
+builder.Services.AddDbContext<AppDbContext>(options =>
+    options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
+
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("AllowReact",
+        policy =>
+        {
+            policy.AllowAnyOrigin()
+                  .AllowAnyHeader()
+                  .AllowAnyMethod();
+        });
+});
+
+builder.Services.AddControllers();
+builder.Services.AddEndpointsApiExplorer();
+builder.Services.AddSwaggerGen();
+
+var app = builder.Build();
+
+// Configure the HTTP request pipeline.
+if (app.Environment.IsDevelopment())
+{
+    app.UseSwagger();
+    app.UseSwaggerUI();
+}
+
+app.UseCors("AllowReact");
+app.UseHttpsRedirection();
+app.UseAuthorization();
+app.MapControllers();
+app.Run();
+
+
+-----------------UI------------------------------------------
+
+npm create vite@latest user-crud-vite
+npm install
+install axios
+
+src/
+│── components/
+│   ├── UserForm.jsx
+│   ├── UserList.jsx
+│── services/
+│   └── userService.js
+│── App.jsx
+│── main.jsx
+
+-----UserForms.jsx-----
+import { useEffect, useState } from "react";
+import { createUser, updateUser } from "../Services/UserService";
+
+const UserForm = ({ selectedUser, refreshUsers, clearSelectedUser }) => {
+    const [user, setUser] = useState({
+        name: "",
+        email: "",
+        age: ""
+    });
+
+    useEffect(() => {
+        if (selectedUser) {
+            setUser(selectedUser);
+        }
+    }, [selectedUser]);
+
+    const handleChange = (e) => {
+        setUser({ ...user, [e.target.name]: e.target.value });
+    };
+
+    const handleSubmit = async (e) => {
+        e.preventDefault();
+
+        if (user.id > 0) {
+            await updateUser(user);
+        } else {
+            await createUser(user);
+        }
+
+        setUser({ name: "", email: "", age: "" });
+        refreshUsers();
+        clearSelectedUser();
+    };
+
+    return (
+        <form onSubmit={handleSubmit}>
+            <h2>{user.id ? "Update User" : "Add User"}</h2>
+
+            <input
+                name="name"
+                placeholder="Name"
+                value={user.name}
+                onChange={handleChange}
+                required
+            />
+
+            <input
+                name="email"
+                type="email"
+                placeholder="Email"
+                value={user.email}
+                onChange={handleChange}
+                required
+            />
+
+            <input
+                name="age"
+                type="number"
+                placeholder="Age"
+                value={user.age}
+                onChange={handleChange}
+                required
+            />
+
+            <button type="submit">
+                {user.id ? "Update" : "Save"}
+            </button>
+        </form>
+    );
+};
+
+export default UserForm;
+
+------------------------------------------------------------
+
+-------UserList.jsx-------
+import { deleteUser } from "../Services/UserService";
+
+const UserList = ({ users, onEdit, refreshUsers }) => {
+
+  const handleDelete = async (id) => {
+    if (window.confirm("Are you sure?")) {
+      await deleteUser(id);
+      refreshUsers();
+    }
+  };
+
+  return (
+    <table border="1" width="100%">
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Email</th>
+          <th>Age</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+
+      <tbody>
+        {users.map((u) => (
+          <tr key={u.id}>
+            <td>{u.name}</td>
+            <td>{u.email}</td>
+            <td>{u.age}</td>
+            <td>
+              <button onClick={() => onEdit(u)}>Edit</button>
+              <button onClick={() => handleDelete(u.id)}>Delete</button>
+            </td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+};
+
+export default UserList;
+
+--------------------------------------------------------------
+---------UserService.jsx----------
+
+import axios from "axios";
+
+const API_URL = "https://localhost:7213/api/User";
+
+export const getAllUsers = () =>
+    axios.get(`${API_URL}/GetAllUsers`);
+
+export const getUserById = (id) =>
+    axios.get(`${API_URL}/GetUserById`, {
+        params: { id }
+    });
+
+export const createUser = (user) =>
+    axios.post(`${API_URL}/CreateNewUser`, user);
+
+export const updateUser = (user) =>
+    axios.put(`${API_URL}/UpdateUserById`, user);
+
+export const deleteUser = (id) =>
+    axios.delete(`${API_URL}/DeleteUserById`, {
+        params: { id }
+    });
+	
+	
+---------------------------------------------------------------------------
+-------App.jsx-------
+
+import { useEffect, useState } from "react";
+import UserForm from "./Components/UserForms";
+import UserList from "./Components/UserList";
+import { getAllUsers } from "./Services/UserService";
+
+function App() {
+  const [users, setUsers] = useState([]);
+  const [selectedUser, setSelectedUser] = useState(null);
+
+  const loadUsers = async () => {
+    const res = await getAllUsers();
+    setUsers(res.data);
+  };
+
+  useEffect(() => {
+    loadUsers();
+  }, []);
+
+  return (
+    <div>
+      <UserForm
+        selectedUser={selectedUser}
+        refreshUsers={loadUsers}
+      />
+
+      <hr />
+
+      <UserList
+        users={users}
+        onEdit={setSelectedUser}
+        refreshUsers={loadUsers}
+      />
+    </div>
+  );
+}
+
+export default App;
+
+-------------------------------------------------------------------------
